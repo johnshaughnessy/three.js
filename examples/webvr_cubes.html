@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>three.js webvr - cubes</title>
+		<title>three.js webvr - cubes foo</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 		<!-- Origin Trial Token, feature = WebVR (For Chrome M62+), origin = https://threejs.org, expires = 2018-07-25 -->
@@ -28,6 +28,8 @@
 		<script src="../build/three.js"></script>
 
 		<script src="js/vr/WebVR.js"></script>
+
+    <script src="./foo.js"></script>
 
 		<script>
 
@@ -187,6 +189,8 @@
 			function render() {
 
 				var delta = clock.getDelta() * 60;
+
+        myLoop();
 
 				if ( isMouseDown === true ) {
 
