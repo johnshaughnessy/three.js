@@ -50,6 +50,7 @@
 
 			function init() {
 
+
 				container = document.createElement( 'div' );
 				document.body.appendChild( container );
 
@@ -66,6 +67,7 @@
 
 				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 10 );
 				scene.add( camera );
+        myInit(scene, camera);
 
 				crosshair = new THREE.Mesh(
 					new THREE.RingBufferGeometry( 0.02, 0.04, 32 ),
@@ -83,7 +85,7 @@
 					new THREE.MeshBasicMaterial( { color: 0x404040, wireframe: true } )
 				);
 				room.position.y = 3;
-				scene.add( room );
+//				scene.add( room );
 
 				scene.add( new THREE.HemisphereLight( 0x606060, 0x404040 ) );
 
@@ -93,30 +95,30 @@
 
 				var geometry = new THREE.BoxBufferGeometry( 0.15, 0.15, 0.15 );
 
-				for ( var i = 0; i < 200; i ++ ) {
+				//for ( var i = 0; i < 200; i ++ ) {
 
-					var object = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: Math.random() * 0xffffff } ) );
+				//	var object = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: Math.random() * 0xffffff } ) );
 
-					object.position.x = Math.random() * 4 - 2;
-					object.position.y = Math.random() * 4 - 2;
-					object.position.z = Math.random() * 4 - 2;
+				//	object.position.x = Math.random() * 4 - 2;
+				//	object.position.y = Math.random() * 4 - 2;
+				//	object.position.z = Math.random() * 4 - 2;
 
-					object.rotation.x = Math.random() * 2 * Math.PI;
-					object.rotation.y = Math.random() * 2 * Math.PI;
-					object.rotation.z = Math.random() * 2 * Math.PI;
+				//	object.rotation.x = Math.random() * 2 * Math.PI;
+				//	object.rotation.y = Math.random() * 2 * Math.PI;
+				//	object.rotation.z = Math.random() * 2 * Math.PI;
 
-					object.scale.x = Math.random() + 0.5;
-					object.scale.y = Math.random() + 0.5;
-					object.scale.z = Math.random() + 0.5;
+				//	object.scale.x = Math.random() + 0.5;
+				//	object.scale.y = Math.random() + 0.5;
+				//	object.scale.z = Math.random() + 0.5;
 
-					object.userData.velocity = new THREE.Vector3();
-					object.userData.velocity.x = Math.random() * 0.01 - 0.005;
-					object.userData.velocity.y = Math.random() * 0.01 - 0.005;
-					object.userData.velocity.z = Math.random() * 0.01 - 0.005;
+				//	object.userData.velocity = new THREE.Vector3();
+				//	object.userData.velocity.x = Math.random() * 0.01 - 0.005;
+				//	object.userData.velocity.y = Math.random() * 0.01 - 0.005;
+				//	object.userData.velocity.z = Math.random() * 0.01 - 0.005;
 
-					room.add( object );
+				//	room.add( object );
 
-				}
+				//}
 
 				raycaster = new THREE.Raycaster();
 
@@ -193,7 +195,7 @@
 
         myLoop();
 
-				if ( isMouseDown === true ) {
+				if ( false && isMouseDown === true ) {
 
 					var cube = room.children[ 0 ];
 					room.remove( cube );
@@ -236,40 +238,40 @@
 
 				// Keep cubes inside room
 
-				for ( var i = 0; i < room.children.length; i ++ ) {
+		//		for ( var i = 0; i < room.children.length; i ++ ) {
 
-					var cube = room.children[ i ];
+		//			var cube = room.children[ i ];
 
-					cube.userData.velocity.multiplyScalar( 1 - ( 0.001 * delta ) );
+		//			cube.userData.velocity.multiplyScalar( 1 - ( 0.001 * delta ) );
 
-					cube.position.add( cube.userData.velocity );
+		//			cube.position.add( cube.userData.velocity );
 
-					if ( cube.position.x < - 3 || cube.position.x > 3 ) {
+		//			if ( cube.position.x < - 3 || cube.position.x > 3 ) {
 
-						cube.position.x = THREE.Math.clamp( cube.position.x, - 3, 3 );
-						cube.userData.velocity.x = - cube.userData.velocity.x;
+		//				cube.position.x = THREE.Math.clamp( cube.position.x, - 3, 3 );
+		//				cube.userData.velocity.x = - cube.userData.velocity.x;
 
-					}
+		//			}
 
-					if ( cube.position.y < - 3 || cube.position.y > 3 ) {
+		//			if ( cube.position.y < - 3 || cube.position.y > 3 ) {
 
-						cube.position.y = THREE.Math.clamp( cube.position.y, - 3, 3 );
-						cube.userData.velocity.y = - cube.userData.velocity.y;
+		//				cube.position.y = THREE.Math.clamp( cube.position.y, - 3, 3 );
+		//				cube.userData.velocity.y = - cube.userData.velocity.y;
 
-					}
+		//			}
 
-					if ( cube.position.z < - 3 || cube.position.z > 3 ) {
+		//			if ( cube.position.z < - 3 || cube.position.z > 3 ) {
 
-						cube.position.z = THREE.Math.clamp( cube.position.z, - 3, 3 );
-						cube.userData.velocity.z = - cube.userData.velocity.z;
+		//				cube.position.z = THREE.Math.clamp( cube.position.z, - 3, 3 );
+		//				cube.userData.velocity.z = - cube.userData.velocity.z;
 
-					}
+		//			}
 
-					cube.rotation.x += cube.userData.velocity.x * 2 * delta;
-					cube.rotation.y += cube.userData.velocity.y * 2 * delta;
-					cube.rotation.z += cube.userData.velocity.z * 2 * delta;
+		//			cube.rotation.x += cube.userData.velocity.x * 2 * delta;
+		//			cube.rotation.y += cube.userData.velocity.y * 2 * delta;
+		//			cube.rotation.z += cube.userData.velocity.z * 2 * delta;
 
-				}
+		//		}
 
 				renderer.render( scene, camera );
 

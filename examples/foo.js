@@ -186,10 +186,6 @@ const bindingDefinition = {
 };
 
 let Input = {};
-
-// Read from the action input frame using this ID
-function idForPath(path) {}
-
 function bind(actionDefinition, bindingDefinition) {
   const actionSetNames = _.uniq(
     _.map(actionDefinition.actions, action =>
@@ -197,7 +193,7 @@ function bind(actionDefinition, bindingDefinition) {
     )
   );
 
-  let ret = _.object(
+  Input = _.object(
     actionSetNames,
     _.map(actionSetNames, setName => {
       const relevantActions = _.filter(
@@ -231,13 +227,9 @@ function bind(actionDefinition, bindingDefinition) {
       return _.object(simpleNames, types);
     })
   );
-
-  console.log("actionSetNames:", actionSetNames);
-  console.log("ret", ret);
-
-  Input = ret;
   return Input;
 }
+bind(actionDefinition, bindingDefinition);
 
 let parity = 0;
 let ActiveActionSet = "cursor_in_right_hand";
@@ -256,19 +248,51 @@ function poll_ActionSetFrame(actionFrame) {
     } else {
       const deviceName = sourceInfo[2];
       const simpleSourceName = sourceInfo[3];
-      if (simpleSourceName === "a") {
-      }
       actionFrame[actions[i]] = curr[simpleSourceName]; // TODO: support multiple devices
     }
   }
 }
 
-bind(actionDefinition, bindingDefinition);
+// Read from the action input frame using this ID
+function idForPath(path) {
+  // TODO: Pack input in efficient structures, then use this ID to fetch it out.
+  const simpleName = path.substring(path.lastIndexOf("/") + 1);
+  return simpleName;
+}
 
-const InputMap_CursorInRightHand = {};
+const cursorOrientationId = idForPath(
+  "/cursor_in_right_hand/in/cursor_orientation"
+);
+const cursorPositionId = idForPath(
+  "/cursor_in_right_hand/in/cursor_orientation"
+);
+const cursorInteractId = idForPath("/cursor_in_right_hand/in/interact");
+
+function getBool(actionFrame, id) {
+  return actionFrame[id];
+}
+
+function getQuaternion(actionFrame, id, quaternion) {
+  return quaternion.fromArray(actionFrame[id]);
+}
+
+function getVector3(actionFrame, id, vector3) {
+  return vector3.fromArray(actionFrame[id]);
+}
+
+let visibleCursorBase = null;
+let myCam = null;
+function myInit(scene, camera) {
+  myCam = camera;
+  visibleCursorBase = new THREE.Mesh(
+    new THREE.BoxBufferGeometry(0.15, 0.15, 0.15),
+    new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff })
+  );
+
+  scene.add(visibleCursorBase);
+}
 
 let actionFrame = {};
-
 let loops = 0;
 function myLoop() {
   loops = loops + 1;
@@ -281,6 +305,19 @@ function myLoop() {
   // Query bound input
   poll_ActionSetFrame(actionFrame);
 
-  // Move cursors
-  for (var i = 0; i < cursors.length; i++) {}
+  // Move cursor
+  if (ActiveActionSet === "cursor_in_right_hand") {
+    getVector3(actionFrame, cursorPositionId, visibleCursorBase.position);
+    getQuaternion(
+      actionFrame,
+      cursorOrientationId,
+      visibleCursorBase.quaternion
+    );
+
+    visibleCursorBase.position.add(myCam.position);
+
+    if (getBool(actionFrame, cursorInteractId)) {
+      console.log("interact!");
+    }
+  }
 }
