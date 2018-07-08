@@ -63,7 +63,7 @@
 				container.appendChild( info );
 
 				scene = new THREE.Scene();
-				scene.background = new THREE.Color( 0x505050 );
+				scene.background = new THREE.Color( 0xA0A0A0 );
 
 				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 10 );
 				scene.add( camera );
@@ -80,11 +80,11 @@
 				crosshair.position.z = - 2;
 				camera.add( crosshair );
 
-				room = new THREE.Mesh(
-					new THREE.BoxBufferGeometry( 6, 6, 6, 8, 8, 8 ),
-					new THREE.MeshBasicMaterial( { color: 0x404040, wireframe: true } )
-				);
-				room.position.y = 3;
+				//room = new THREE.Mesh(
+				//	new THREE.BoxBufferGeometry( 6, 6, 6, 8, 8, 8 ),
+				//	new THREE.MeshBasicMaterial( { color: 0x404040, wireframe: true } )
+				//);
+				//room.position.y = 3;
 //				scene.add( room );
 
 				scene.add( new THREE.HemisphereLight( 0x606060, 0x404040 ) );
@@ -195,26 +195,26 @@
 
         myLoop();
 
-				if ( false && isMouseDown === true ) {
-
-					var cube = room.children[ 0 ];
-					room.remove( cube );
-
-					cube.position.set( 0, 0, - 0.75 );
-					cube.position.applyQuaternion( camera.quaternion );
-					cube.userData.velocity.x = ( Math.random() - 0.5 ) * 0.02 * delta;
-					cube.userData.velocity.y = ( Math.random() - 0.5 ) * 0.02 * delta;
-					cube.userData.velocity.z = ( Math.random() * 0.01 - 0.05 ) * delta;
-					cube.userData.velocity.applyQuaternion( camera.quaternion );
-					room.add( cube );
-
-				}
+//				if ( false && isMouseDown === true ) {
+//
+//					var cube = room.children[ 0 ];
+//					room.remove( cube );
+//
+//					cube.position.set( 0, 0, - 0.75 );
+//					cube.position.applyQuaternion( camera.quaternion );
+//					cube.userData.velocity.x = ( Math.random() - 0.5 ) * 0.02 * delta;
+//					cube.userData.velocity.y = ( Math.random() - 0.5 ) * 0.02 * delta;
+//					cube.userData.velocity.z = ( Math.random() * 0.01 - 0.05 ) * delta;
+//					cube.userData.velocity.applyQuaternion( camera.quaternion );
+//					room.add( cube );
+//
+//				}
 
 				// find intersections
 
 				raycaster.setFromCamera( { x: 0, y: 0 }, camera );
 
-				var intersects = raycaster.intersectObjects( room.children );
+				var intersects = [];//raycaster.intersectObjects( room.children );
 
 				if ( intersects.length > 0 ) {
 

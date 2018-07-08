@@ -1,3 +1,29 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Util?
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+function logMatrix(m) {
+  for (var i = 0; i < 16; i++) {
+    console.log(m.elements[i]);
+  }
+}
+function equals(a, b, epsilon) {
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (Math.abs(a[i] - b[i]) > epsilon) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return a === b;
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Raw Device Input
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 let RightOculusTouchGamepad = null;
 
 function GetRightOculusTouchGamepad() {
@@ -129,27 +155,11 @@ function poll_RightOculusTouchInput(gamepad, frame) {
     frame.angularAcceleration[2] = pose.angularAcceleration[2];
   }
 }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-function equals(a, b, epsilon) {
-  if (Array.isArray(a)) {
-    if (a.length !== b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (Math.abs(a[i] - b[i]) > epsilon) {
-        return false;
-      }
-    }
-    return true;
-  }
-  return a === b;
-}
-
-const rightHandCursor = {
-  origin: [0, 0, 0],
-  direction: [0, 0, 0]
-};
-const cursors = [rightHandCursor];
-
-const quaternion = new THREE.Quaternion();
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Actions
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const actionDefinition = {
   actions: [
@@ -263,9 +273,7 @@ function idForPath(path) {
 const cursorOrientationId = idForPath(
   "/cursor_in_right_hand/in/cursor_orientation"
 );
-const cursorPositionId = idForPath(
-  "/cursor_in_right_hand/in/cursor_orientation"
-);
+const cursorPositionId = idForPath("/cursor_in_right_hand/in/cursor_position");
 const cursorInteractId = idForPath("/cursor_in_right_hand/in/interact");
 
 function getBool(actionFrame, id) {
@@ -279,45 +287,323 @@ function getQuaternion(actionFrame, id, quaternion) {
 function getVector3(actionFrame, id, vector3) {
   return vector3.fromArray(actionFrame[id]);
 }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-let visibleCursorBase = null;
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// AltArray is an object pool so that we can avoid reallocating memory when we want to add/remove items
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+function AltArray(constructor, size) {
+  this.firstUnused = 0;
+  this.elements = [];
+  for (let i = 0; i < size; i++) {
+    this.elements.push(new constructor());
+  }
+  this.size = size;
+}
+
+Object.assign(AltArray.prototype, {
+  constructor: AltArray,
+  borrow: function() {
+    const unused = this.elements[this.firstUnused];
+    this.firstUnused = this.firstUnused + 1;
+    return unused;
+  },
+
+  refund: function refund(index) {
+    this.elements[index].copy(this.elements[this.firstUnused - 1]); // TODO: What if this.firstUnused === 0?
+    this.firstUnused = this.firstUnused - 1;
+  },
+
+  get: function get(i) {
+    return this.elements[i];
+  }
+});
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Scene hierarchy stuff
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+const TransformFlag_Dirty = 1 << 1;
+function Transform() {
+  return {
+    flags: 0,
+    entity: Math.random(), // hope for no collisions
+    matrix: new THREE.Matrix4(),
+    worldMatrix: new THREE.Matrix4()
+  };
+}
+Transform.prototype.copy = function copy(other) {
+  this.flags = other.flags;
+  this.entity = other.entity;
+  this.matrix.copy(other.matrix);
+  this.worldMatrix.copy(other.worldMatrix);
+};
+function TransformAssociation() {
+  return {
+    flags: 0,
+    parent: -1,
+    child: -1
+  };
+}
+TransformAssociation.prototype.copy = function copy(other) {
+  this.flags = other.flags;
+  this.parent = other.parent;
+  this.child = other.child;
+};
+const PendingTransformationFlag_MatrixChanged = 1 << 1;
+const PendingTransformationFlag_ParentMatrixWorldChanged = 1 << 2;
+function PendingTransformation() {
+  return {
+    flags: 0,
+    entity: -1,
+    matrix: new THREE.Matrix4()
+  };
+}
+PendingTransformation.prototype.copy = function copy(other) {
+  this.flags = other.flags;
+  this.entity = other.entity;
+  this.matrix = other.matrix;
+};
+function Object3DInterrop() {
+  return {
+    flags: 0,
+    entity: -1,
+    object3D: null
+  };
+}
+Object3DInterrop.prototype.copy = function copy(other) {
+  this.flags = other.flags;
+  this.entity = other.entity;
+  this.object3D = other.object3D;
+};
+function Object3DInterropCopy() {
+  return {
+    matrixWorld: new THREE.Matrix4(),
+    matrix: new THREE.Matrix4(),
+    object3D: null
+  };
+}
+Object3DInterropCopy.prototype.copy = function copy(other) {
+  this.matrix.copy(other.matrix);
+  this.object3D = other.object3D;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Initialization
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+const bufferLength = 3000;
+const transforms = new AltArray(Transform, bufferLength);
+const transformAssociations = new AltArray(TransformAssociation, bufferLength);
+const pendingTransformations = new AltArray(
+  PendingTransformation,
+  bufferLength
+);
+const object3DInterrops = new AltArray(Object3DInterrop, bufferLength);
+const pendingObject3DInterropCopies = new AltArray(
+  Object3DInterropCopy,
+  bufferLength
+);
+
+const Vector3_Ones = new THREE.Vector3(1, 1, 1);
+const Helper_Matrix4 = new THREE.Matrix4();
+const Helper_Vector3 = new THREE.Vector3();
+const Helper_Quaternion = new THREE.Quaternion();
+
 let myCam = null;
+let cursorTransform = transforms.borrow();
+cursorTransform.flags = 0;
+let cursorInterrop = object3DInterrops.borrow();
+cursorInterrop.flags = 0;
+cursorInterrop.entity = cursorTransform.entity;
+cursorInterrop.object3D = new THREE.Mesh(
+  new THREE.BoxBufferGeometry(0.15, 0.15, 0.15),
+  new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff })
+);
+
+let fooTransform = transforms.borrow();
+fooTransform.flags = 0;
+fooTransform.matrix.compose(
+  new THREE.Vector3(0, 0, -1),
+  new THREE.Quaternion(),
+  Vector3_Ones
+);
+
+let fooInterrop = object3DInterrops.borrow();
+fooInterrop.flags = 0;
+fooInterrop.entity = fooTransform.entity;
+fooInterrop.object3D = new THREE.Mesh(
+  new THREE.BoxBufferGeometry(0.15, 0.15, 0.15),
+  new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff })
+);
+let fooAssociation = transformAssociations.borrow();
+fooAssociation.flags = 0;
+fooAssociation.parent = cursorTransform.entity;
+fooAssociation.child = fooTransform.entity;
+
 function myInit(scene, camera) {
   myCam = camera;
-  visibleCursorBase = new THREE.Mesh(
-    new THREE.BoxBufferGeometry(0.15, 0.15, 0.15),
-    new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff })
-  );
-
-  scene.add(visibleCursorBase);
+  scene.add(cursorInterrop.object3D);
+  scene.add(fooInterrop.object3D); // Added to scene directly. NOT added to cursor
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Game Loop
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 let actionFrame = {};
 let loops = 0;
 function myLoop() {
   loops = loops + 1;
+
+  ////////////////////////////////////////////////////////////////////////////
   // Query for input device
+  //
+  // TODO: How do I react to device connection / disconnection?
+  ////////////////////////////////////////////////////////////////////////////
   if (!RightOculusTouchGamepad) {
     RightOculusTouchGamepad = GetRightOculusTouchGamepad();
     return;
   }
 
-  // Query bound input
+  ////////////////////////////////////////////////////////////////////////////
+  // Get actions for the active action set
+  //
+  // TODO: Is there a performance benefit to only reading parts of the device that I'm going to use?
+  // TODO: What do I do about curr/prev when the action set changes?
+  // TODO:
+  ////////////////////////////////////////////////////////////////////////////
   poll_ActionSetFrame(actionFrame);
 
-  // Move cursor
+  let doPrint = false;
   if (ActiveActionSet === "cursor_in_right_hand") {
-    getVector3(actionFrame, cursorPositionId, visibleCursorBase.position);
-    getQuaternion(
-      actionFrame,
-      cursorOrientationId,
-      visibleCursorBase.quaternion
-    );
-
-    visibleCursorBase.position.add(myCam.position);
-
     if (getBool(actionFrame, cursorInteractId)) {
-      console.log("interact!");
+      // Get cursor position and orientation from actionFrame
+      getVector3(actionFrame, cursorPositionId, Helper_Vector3);
+      Helper_Vector3.add(myCam.position).add(new THREE.Vector3(-0.5, 0, 0.3));
+      getQuaternion(actionFrame, cursorOrientationId, Helper_Quaternion);
+      Helper_Matrix4.compose(Helper_Vector3, Helper_Quaternion, Vector3_Ones);
+
+      // Add pending transformation to affect cursor
+      const pendingTransformation = pendingTransformations.borrow();
+      pendingTransformation.flags = 0;
+      pendingTransformation.flags |= PendingTransformationFlag_MatrixChanged;
+      pendingTransformation.entity = cursorTransform.entity;
+      pendingTransformation.matrix.copy(Helper_Matrix4);
+
+      doPrint = true;
     }
   }
+
+  ////////////////////////////////////////////////////////////////////////////
+  // Process PendingTransformations
+  //
+  // TODO: Suppose I'm trying to minimize L2 cache misses. How can I do this?
+  ////////////////////////////////////////////////////////////////////////////
+  let i = 0;
+  while (i < pendingTransformations.firstUnused) {
+    const pendingTransformation = pendingTransformations.get(i);
+    const entity = pendingTransformation.entity;
+    let transform = null;
+    for (let j = 0; j < transforms.firstUnused; j++) {
+      transform = transforms.get(j);
+      if (transform.entity === entity) {
+        transform.flags |= TransformFlag_Dirty;
+
+        if (
+          (pendingTransformation.flags &
+            PendingTransformationFlag_MatrixChanged) ===
+          PendingTransformationFlag_MatrixChanged
+        ) {
+          const parentWorldMatrix = null;
+
+          for (let k = 0; k < transformAssociations.firstUnused; k++) {
+            const association = transformAssociations.get(k);
+            if (association.child === entity) {
+              const parent = association.parent;
+              for (let q = 0; q < transforms.firstUnused; q++) {
+                if (transforms.get(q).entity === parent) {
+                  parentWorldMatrix = transforms.get(q).worldMatrix;
+                }
+                break;
+              }
+              break;
+            }
+          }
+
+          if (parentWorldMatrix) {
+            transform.matrix.copy(pendingTransformation.matrix);
+            transform.worldMatrix.multiplyMatrices(
+              parentWorldMatrix,
+              transform.matrix
+            );
+          } else {
+            transform.matrix.copy(pendingTransformation.matrix);
+            transform.worldMatrix.copy(pendingTransformation.matrix);
+          }
+        } else if (
+          (pendingTransformation.flags &
+            PendingTransformationFlag_ParentMatrixWorldChanged) ===
+          PendingTransformationFlag_ParentMatrixWorldChanged
+        ) {
+          transform.worldMatrix.multiplyMatrices(
+            pendingTransformation.matrix,
+            transform.matrix
+          );
+        }
+        break;
+      }
+    }
+    // Cascade changes through the children
+    for (let j = 0; j < transformAssociations.firstUnused; j++) {
+      const association = transformAssociations.get(j);
+      if (association.parent === entity) {
+        const childTransformation = pendingTransformations.borrow();
+        childTransformation.entity = association.child;
+        childTransformation.flags = 0;
+        childTransformation.flags |= PendingTransformationFlag_ParentMatrixWorldChanged;
+        childTransformation.matrix.copy(transform.worldMatrix);
+      }
+    }
+    i = i + 1;
+  }
+  pendingTransformations.firstUnused = 0;
+
+  ////////////////////////////////////////////////////////////////////////////
+  // Write to Object3D's
+  ////////////////////////////////////////////////////////////////////////////
+  for (let j = 0; j < object3DInterrops.firstUnused; j++) {
+    const object3DInterrop = object3DInterrops.get(j);
+    for (let k = 0; k < transforms.firstUnused; k++) {
+      const transform = transforms.get(k);
+      if (
+        object3DInterrop.entity === transform.entity &&
+        (transform.flags & TransformFlag_Dirty) === TransformFlag_Dirty
+      ) {
+        const copy = pendingObject3DInterropCopies.borrow();
+        copy.matrixWorld.copy(transform.worldMatrix);
+        copy.matrix.copy(transform.worldMatrix);
+        copy.object3D = object3DInterrop.object3D;
+        transform.flags ^= TransformFlag_Dirty;
+      }
+    }
+  }
+  for (let j = 0; j < pendingObject3DInterropCopies.firstUnused; j++) {
+    const pendingCopy = pendingObject3DInterropCopies.get(j);
+    const matrixWorld = pendingCopy.matrixWorld;
+    const matrix = pendingCopy.matrix;
+    const object3D = pendingCopy.object3D;
+    object3D.matrix.copy(matrix);
+    object3D.matrixWorld.copy(matrixWorld);
+    object3D.matrix.decompose(
+      object3D.position,
+      object3D.quaternion,
+      object3D.scale
+    );
+    object3D.matrixAutoUpdate = false;
+  }
+  pendingObject3DInterropCopies.firstUnused = 0;
 }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
